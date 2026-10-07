@@ -12,7 +12,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -34,19 +33,14 @@ public class UserController {
                 .body(userService.create(request));
     }
 
-    @GetMapping
-    public ResponseEntity<List<UserResponse>> findAll() {
-        return ResponseEntity.ok(
-                userService.findAll()
-        );
-    }
-
-    @GetMapping("/{id}")
-    public ResponseEntity<UserResponse> findById(
-            @PathVariable UUID id
+    @GetMapping("/me")
+    public ResponseEntity<UserResponse> me(
+            Authentication authentication
     ) {
+        UUID userId = (UUID) authentication.getPrincipal();
+
         return ResponseEntity.ok(
-                userService.findById(id)
+                userService.findById(userId)
         );
     }
 

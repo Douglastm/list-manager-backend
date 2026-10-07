@@ -12,7 +12,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -33,7 +32,9 @@ public class UserService {
     }
 
     @Transactional
-    public UserResponse create(CreateUserRequest request) {
+    public UserResponse create(
+            CreateUserRequest request
+    ) {
 
         if (userRepository.existsByEmail(request.email())) {
             throw new BusinessException(
@@ -56,18 +57,9 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    public List<UserResponse> findAll() {
+    public UserResponse findById(UUID userId) {
 
-        return userRepository.findAll()
-                .stream()
-                .map(userMapper::toResponse)
-                .toList();
-    }
-
-    @Transactional(readOnly = true)
-    public UserResponse findById(UUID id) {
-
-        User user = userRepository.findById(id)
+        User user = userRepository.findById(userId)
                 .orElseThrow(() ->
                         new BusinessException(
                                 "User not found"
