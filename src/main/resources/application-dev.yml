@@ -1,0 +1,17 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:${POSTGRES_PORT:5433}/${DB_NAME:list_manager}
+    username: ${DB_USER:list_manager}
+    password: ${DB_PASSWORD:list_manager}
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    show-sql: false
+
+  jackson:
+    time-zone: America/Sao_Paulo
+
+server:
+  port: 8080

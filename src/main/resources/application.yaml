@@ -1,0 +1,10 @@
+spring:
+  application:
+    name: list-manager
+
+  profiles:
+    default: dev
+
+  output:
+    ansi:
+      enabled: ALWAYS
