@@ -7,22 +7,31 @@ import com.douglas.listmanager.feature.user.entity.User;
 import com.douglas.listmanager.feature.user.mapper.UserMapper;
 import com.douglas.listmanager.feature.user.repository.UserRepository;
 import com.douglas.listmanager.shared.exception.BusinessException;
-import com.douglas.listmanager.shared.exception.ResourceNotFoundException;
-import org.junit.jupiter.api.BeforeEach;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.eq;
+
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceTest {
@@ -31,48 +40,32 @@ class UserServiceTest {
     private UserRepository userRepository;
 
     @Mock
-    private UserMapper userMapper;
+    private PasswordEncoder passwordEncoder;
 
     @Mock
-    private PasswordEncoder passwordEncoder;
+    private UserMapper userMapper;
 
     @InjectMocks
     private UserService userService;
 
-    private UUID userId;
-    private User user;
-    private UserResponse userResponse;
-
-    @BeforeEach
-    void setUp() {
-
-        userId = UUID.randomUUID();
-
-        user = User.builder()
-                .id(userId)
-                .name("Douglas")
-                .email("douglas@email.com")
-                .password("encoded-password")
-                .active(true)
-                .build();
-
-        userResponse = new UserResponse(
-                userId,
-                "Douglas",
-                "douglas@email.com",
-                true,
-                user.getCreatedAt(),
-                user.getUpdatedAt()
-        );
-    }
-
     @Test
-    void shouldCreateUserSuccessfully() {
+    void shouldCreateUser() {
 
         CreateUserRequest request = new CreateUserRequest(
                 "Douglas",
                 "douglas@email.com",
                 "123456"
+        );
+
+        User user = new User();
+
+        UserResponse response = new UserResponse(
+                UUID.randomUUID(),
+                "Douglas",
+                "douglas@email.com",
+                true,
+                null,
+                null
         );
 
         when(userRepository.existsByEmail(request.email()))
@@ -85,20 +78,23 @@ class UserServiceTest {
                 .thenReturn(user);
 
         when(userMapper.toResponse(user))
-                .thenReturn(userResponse);
+                .thenReturn(response);
 
         UserResponse result = userService.create(request);
 
-        assertNotNull(result);
-        assertEquals(userId, result.id());
-        assertEquals("Douglas", result.name());
-        assertEquals("douglas@email.com", result.email());
-        assertTrue(result.active());
+        assertSame(response, result);
 
-        verify(userRepository).existsByEmail(request.email());
-        verify(passwordEncoder).encode(request.password());
-        verify(userRepository).save(any(User.class));
-        verify(userMapper).toResponse(user);
+        verify(userRepository)
+                .existsByEmail(request.email());
+
+        verify(passwordEncoder)
+                .encode(request.password());
+
+        verify(userRepository)
+                .save(any(User.class));
+
+        verify(userMapper)
+                .toResponse(user);
     }
 
     @Test
@@ -123,45 +119,59 @@ class UserServiceTest {
                 exception.getMessage()
         );
 
-        verify(userRepository).existsByEmail(request.email());
+        verify(userRepository)
+                .existsByEmail(request.email());
 
         verify(userRepository, never())
                 .save(any(User.class));
 
         verify(passwordEncoder, never())
-                .encode(anyString());
+                .encode(any());
     }
 
     @Test
     void shouldFindUserById() {
 
-        when(userRepository.findByIdAndActiveTrue(userId))
+        UUID userId = UUID.randomUUID();
+
+        User user = new User();
+
+        UserResponse response = new UserResponse(
+                userId,
+                "Douglas",
+                "douglas@email.com",
+                true,
+                null,
+                null
+        );
+
+        when(userRepository.findById(userId))
                 .thenReturn(Optional.of(user));
 
         when(userMapper.toResponse(user))
-                .thenReturn(userResponse);
+                .thenReturn(response);
 
         UserResponse result = userService.findById(userId);
 
-        assertNotNull(result);
-        assertEquals(userId, result.id());
-        assertEquals("Douglas", result.name());
+        assertSame(response, result);
 
         verify(userRepository)
-                .findByIdAndActiveTrue(userId);
+                .findById(userId);
 
         verify(userMapper)
                 .toResponse(user);
     }
 
     @Test
-    void shouldThrowExceptionWhenUserDoesNotExist() {
+    void shouldThrowExceptionWhenUserIsNotFound() {
 
-        when(userRepository.findByIdAndActiveTrue(userId))
+        UUID userId = UUID.randomUUID();
+
+        when(userRepository.findById(userId))
                 .thenReturn(Optional.empty());
 
-        ResourceNotFoundException exception = assertThrows(
-                ResourceNotFoundException.class,
+        BusinessException exception = assertThrows(
+                BusinessException.class,
                 () -> userService.findById(userId)
         );
 
@@ -171,94 +181,63 @@ class UserServiceTest {
         );
 
         verify(userRepository)
-                .findByIdAndActiveTrue(userId);
+                .findById(userId);
 
         verify(userMapper, never())
-                .toResponse(any());
+                .toResponse(any(User.class));
     }
 
     @Test
-    void shouldFindAllActiveUsers() {
+    void shouldUpdateUser() {
 
-        User secondUser = User.builder()
-                .id(UUID.randomUUID())
-                .name("João")
-                .email("joao@email.com")
-                .password("encoded-password")
-                .active(true)
-                .build();
-
-        UserResponse secondResponse = new UserResponse(
-                secondUser.getId(),
-                secondUser.getName(),
-                secondUser.getEmail(),
-                true,
-                secondUser.getCreatedAt(),
-                secondUser.getUpdatedAt()
-        );
-
-        when(userRepository.findAllByActiveTrue())
-                .thenReturn(List.of(user, secondUser));
-
-        when(userMapper.toResponse(user))
-                .thenReturn(userResponse);
-
-        when(userMapper.toResponse(secondUser))
-                .thenReturn(secondResponse);
-
-        List<UserResponse> result = userService.findAll();
-
-        assertNotNull(result);
-        assertEquals(2, result.size());
-
-        assertEquals("Douglas", result.get(0).name());
-        assertEquals("João", result.get(1).name());
-
-        verify(userRepository)
-                .findAllByActiveTrue();
-
-        verify(userMapper)
-                .toResponse(user);
-
-        verify(userMapper)
-                .toResponse(secondUser);
-    }
-
-    @Test
-    void shouldUpdateUserSuccessfully() {
+        UUID userId = UUID.randomUUID();
 
         UpdateUserRequest request = new UpdateUserRequest(
-                "Douglas Magalhães",
+                "Douglas Alterado",
                 "douglas.novo@email.com",
-                "novaSenha123"
+                "654321"
         );
 
-        when(userRepository.findByIdAndActiveTrue(userId))
+        User user = new User();
+
+        user.setName("Douglas");
+        user.setEmail("douglas@email.com");
+        user.setPassword("old-password");
+        user.setActive(true);
+
+        UserResponse response = new UserResponse(
+                userId,
+                "Douglas Alterado",
+                "douglas.novo@email.com",
+                true,
+                null,
+                null
+        );
+
+        when(userRepository.findById(userId))
                 .thenReturn(Optional.of(user));
 
-        when(userRepository.existsByEmailAndIdNot(
-                request.email(),
-                userId
-        )).thenReturn(false);
+        when(userRepository.existsByEmail(request.email()))
+                .thenReturn(false);
 
         when(passwordEncoder.encode(request.password()))
-                .thenReturn("new-encoded-password");
+                .thenReturn("new-password");
 
         when(userRepository.save(user))
                 .thenReturn(user);
 
         when(userMapper.toResponse(user))
-                .thenReturn(userResponse);
+                .thenReturn(response);
 
         UserResponse result = userService.update(
                 userId,
                 request
         );
 
-        assertNotNull(result);
+        assertSame(response, result);
 
         assertEquals(
-                "Douglas Magalhães",
+                "Douglas Alterado",
                 user.getName()
         );
 
@@ -268,60 +247,79 @@ class UserServiceTest {
         );
 
         assertEquals(
-                "new-encoded-password",
+                "new-password",
                 user.getPassword()
         );
 
         verify(userRepository)
-                .findByIdAndActiveTrue(userId);
+                .findById(userId);
 
         verify(userRepository)
-                .existsByEmailAndIdNot(
-                        request.email(),
-                        userId
-                );
+                .existsByEmail(request.email());
 
         verify(passwordEncoder)
                 .encode(request.password());
 
         verify(userRepository)
                 .save(user);
+
+        verify(userMapper)
+                .toResponse(user);
     }
 
     @Test
     void shouldUpdateUserWithoutChangingPassword() {
 
-        String oldPassword = user.getPassword();
+        UUID userId = UUID.randomUUID();
 
         UpdateUserRequest request = new UpdateUserRequest(
-                "Douglas Magalhães",
+                "Douglas Alterado",
                 "douglas.novo@email.com",
                 null
         );
 
-        when(userRepository.findByIdAndActiveTrue(userId))
+        User user = new User();
+
+        user.setName("Douglas");
+        user.setEmail("douglas@email.com");
+        user.setPassword("old-password");
+        user.setActive(true);
+
+        UserResponse response = new UserResponse(
+                userId,
+                "Douglas Alterado",
+                "douglas.novo@email.com",
+                true,
+                null,
+                null
+        );
+
+        when(userRepository.findById(userId))
                 .thenReturn(Optional.of(user));
 
-        when(userRepository.existsByEmailAndIdNot(
-                request.email(),
-                userId
-        )).thenReturn(false);
+        when(userRepository.existsByEmail(request.email()))
+                .thenReturn(false);
 
         when(userRepository.save(user))
                 .thenReturn(user);
 
         when(userMapper.toResponse(user))
-                .thenReturn(userResponse);
+                .thenReturn(response);
 
-        userService.update(userId, request);
+        UserResponse result = userService.update(
+                userId,
+                request
+        );
+
+        assertSame(response, result);
 
         assertEquals(
-                oldPassword,
+                "old-password",
                 user.getPassword()
         );
 
         verify(passwordEncoder, never())
-                .encode(anyString());
+                .encode(any());
 
         verify(userRepository)
                 .save(user);
@@ -330,23 +328,33 @@ class UserServiceTest {
     @Test
     void shouldNotUpdateUserWhenEmailAlreadyExists() {
 
+        UUID userId = UUID.randomUUID();
+
         UpdateUserRequest request = new UpdateUserRequest(
                 "Douglas",
-                "existing@email.com",
+                "outro@email.com",
                 null
         );
 
-        when(userRepository.findByIdAndActiveTrue(userId))
+        User user = new User();
+
+        user.setName("Douglas");
+        user.setEmail("douglas@email.com");
+        user.setPassword("old-password");
+        user.setActive(true);
+
+        when(userRepository.findById(userId))
                 .thenReturn(Optional.of(user));
 
-        when(userRepository.existsByEmailAndIdNot(
-                request.email(),
-                userId
-        )).thenReturn(true);
+        when(userRepository.existsByEmail(request.email()))
+                .thenReturn(true);
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> userService.update(userId, request)
+                () -> userService.update(
+                        userId,
+                        request
+                )
         );
 
         assertEquals(
@@ -354,17 +362,135 @@ class UserServiceTest {
                 exception.getMessage()
         );
 
+        verify(userRepository)
+                .findById(userId);
+
+        verify(userRepository)
+                .existsByEmail(request.email());
+
+        verify(userRepository, never())
+                .save(any(User.class));
+
+        verify(passwordEncoder, never())
+                .encode(any());
+    }
+
+    @Test
+    void shouldUpdateUserWithSameEmail() {
+
+        UUID userId = UUID.randomUUID();
+
+        UpdateUserRequest request = new UpdateUserRequest(
+                "Douglas Alterado",
+                "douglas@email.com",
+                null
+        );
+
+        User user = new User();
+
+        user.setName("Douglas");
+        user.setEmail("douglas@email.com");
+        user.setPassword("old-password");
+        user.setActive(true);
+
+        UserResponse response = new UserResponse(
+                userId,
+                "Douglas Alterado",
+                "douglas@email.com",
+                true,
+                null,
+                null
+        );
+
+        when(userRepository.findById(userId))
+                .thenReturn(Optional.of(user));
+
+        when(userRepository.save(user))
+                .thenReturn(user);
+
+        when(userMapper.toResponse(user))
+                .thenReturn(response);
+
+        UserResponse result = userService.update(
+                userId,
+                request
+        );
+
+        assertSame(response, result);
+
+        assertEquals(
+                "Douglas Alterado",
+                user.getName()
+        );
+
+        assertEquals(
+                "douglas@email.com",
+                user.getEmail()
+        );
+
+        verify(userRepository)
+                .findById(userId);
+
+        verify(userRepository, never())
+                .existsByEmail(request.email());
+
+        verify(userRepository)
+                .save(user);
+    }
+
+    @Test
+    void shouldThrowExceptionWhenUpdatingNonexistentUser() {
+
+        UUID userId = UUID.randomUUID();
+
+        UpdateUserRequest request = new UpdateUserRequest(
+                "Douglas",
+                "douglas@email.com",
+                null
+        );
+
+        when(userRepository.findById(userId))
+                .thenReturn(Optional.empty());
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> userService.update(
+                        userId,
+                        request
+                )
+        );
+
+        assertEquals(
+                "User not found",
+                exception.getMessage()
+        );
+
+        verify(userRepository)
+                .findById(userId);
+
         verify(userRepository, never())
                 .save(any(User.class));
     }
 
     @Test
-    void shouldDeactivateUserSuccessfully() {
+    void shouldDeleteUser() {
+
+        UUID userId = UUID.randomUUID();
+
+        User user = new User();
+
+        user.setName("Douglas");
+        user.setEmail("douglas@email.com");
+        user.setPassword("password");
+        user.setActive(true);
 
         when(userRepository.findById(userId))
                 .thenReturn(Optional.of(user));
 
-        userService.deactivate(userId);
+        when(userRepository.save(user))
+                .thenReturn(user);
+
+        userService.delete(userId);
 
         assertFalse(user.getActive());
 
@@ -376,42 +502,25 @@ class UserServiceTest {
     }
 
     @Test
-    void shouldNotDeactivateUserWhenAlreadyInactive() {
+    void shouldThrowExceptionWhenDeletingNonexistentUser() {
 
-        user.setActive(false);
-
-        when(userRepository.findById(userId))
-                .thenReturn(Optional.of(user));
-
-        BusinessException exception = assertThrows(
-                BusinessException.class,
-                () -> userService.deactivate(userId)
-        );
-
-        assertEquals(
-                "User is already inactive",
-                exception.getMessage()
-        );
-
-        verify(userRepository, never())
-                .save(any(User.class));
-    }
-
-    @Test
-    void shouldNotDeactivateUserWhenNotFound() {
+        UUID userId = UUID.randomUUID();
 
         when(userRepository.findById(userId))
                 .thenReturn(Optional.empty());
 
-        ResourceNotFoundException exception = assertThrows(
-                ResourceNotFoundException.class,
-                () -> userService.deactivate(userId)
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> userService.delete(userId)
         );
 
         assertEquals(
                 "User not found",
                 exception.getMessage()
         );
+
+        verify(userRepository)
+                .findById(userId);
 
         verify(userRepository, never())
                 .save(any(User.class));

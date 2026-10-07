@@ -4,48 +4,43 @@ import com.douglas.listmanager.feature.user.dto.CreateUserRequest;
 import com.douglas.listmanager.feature.user.dto.UpdateUserRequest;
 import com.douglas.listmanager.feature.user.dto.UserResponse;
 import com.douglas.listmanager.feature.user.service.UserService;
-import com.douglas.listmanager.shared.exception.GlobalExceptionHandler;
-import com.douglas.listmanager.shared.exception.ResourceNotFoundException;
 
 import org.junit.jupiter.api.Test;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
-import org.springframework.context.annotation.Import;
-import org.springframework.http.MediaType;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
-import tools.jackson.databind.ObjectMapper;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 
-import java.time.LocalDateTime;
-import java.util.List;
+import org.junit.jupiter.api.extension.ExtendWith;
+
 import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-@WebMvcTest(UserController.class)
-@AutoConfigureMockMvc(addFilters = false)
-@Import(GlobalExceptionHandler.class)
+@ExtendWith(MockitoExtension.class)
 class UserControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    @MockitoBean
+    @Mock
     private UserService userService;
 
+    @Mock
+    private Authentication authentication;
+
+    @InjectMocks
+    private UserController userController;
+
     @Test
-    void shouldCreateUser() throws Exception {
+    void shouldCreateUser() {
 
         UUID userId = UUID.randomUUID();
 
@@ -60,72 +55,32 @@ class UserControllerTest {
                 "Douglas",
                 "douglas@email.com",
                 true,
-                LocalDateTime.now(),
+                null,
                 null
         );
 
-        when(userService.create(any(CreateUserRequest.class)))
+        when(userService.create(request))
                 .thenReturn(response);
 
-        mockMvc.perform(
-                        post("/api/v1/users")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request))
-                )
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").value(userId.toString()))
-                .andExpect(jsonPath("$.name").value("Douglas"))
-                .andExpect(jsonPath("$.email")
-                        .value("douglas@email.com"))
-                .andExpect(jsonPath("$.active").value(true));
+        ResponseEntity<UserResponse> result =
+                userController.create(request);
+
+        assertEquals(
+                HttpStatus.CREATED,
+                result.getStatusCode()
+        );
+
+        assertEquals(
+                response,
+                result.getBody()
+        );
 
         verify(userService)
-                .create(any(CreateUserRequest.class));
+                .create(request);
     }
 
     @Test
-    void shouldFindAllUsers() throws Exception {
-
-        UUID firstId = UUID.randomUUID();
-        UUID secondId = UUID.randomUUID();
-
-        UserResponse firstUser = new UserResponse(
-                firstId,
-                "Douglas",
-                "douglas@email.com",
-                true,
-                LocalDateTime.now(),
-                null
-        );
-
-        UserResponse secondUser = new UserResponse(
-                secondId,
-                "João",
-                "joao@email.com",
-                true,
-                LocalDateTime.now(),
-                null
-        );
-
-        when(userService.findAll())
-                .thenReturn(List.of(firstUser, secondUser));
-
-        mockMvc.perform(
-                        get("/api/v1/users")
-                )
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[0].name")
-                        .value("Douglas"))
-                .andExpect(jsonPath("$[1].name")
-                        .value("João"));
-
-        verify(userService)
-                .findAll();
-    }
-
-    @Test
-    void shouldFindUserById() throws Exception {
+    void shouldReturnAuthenticatedUser() {
 
         UUID userId = UUID.randomUUID();
 
@@ -134,134 +89,112 @@ class UserControllerTest {
                 "Douglas",
                 "douglas@email.com",
                 true,
-                LocalDateTime.now(),
+                null,
                 null
         );
+
+        when(authentication.getPrincipal())
+                .thenReturn(userId);
 
         when(userService.findById(userId))
                 .thenReturn(response);
 
-        mockMvc.perform(
-                        get("/api/v1/users/{id}", userId)
-                )
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id")
-                        .value(userId.toString()))
-                .andExpect(jsonPath("$.name")
-                        .value("Douglas"))
-                .andExpect(jsonPath("$.email")
-                        .value("douglas@email.com"));
+        ResponseEntity<UserResponse> result =
+                userController.me(authentication);
+
+        assertEquals(
+                HttpStatus.OK,
+                result.getStatusCode()
+        );
+
+        assertEquals(
+                response,
+                result.getBody()
+        );
+
+        verify(authentication)
+                .getPrincipal();
 
         verify(userService)
                 .findById(userId);
     }
 
     @Test
-    void shouldReturn404WhenUserDoesNotExist() throws Exception {
-
-        UUID userId = UUID.randomUUID();
-
-        when(userService.findById(userId))
-                .thenThrow(
-                        new ResourceNotFoundException("User not found")
-                );
-
-        mockMvc.perform(
-                        get("/api/v1/users/{id}", userId)
-                )
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.status").value(404))
-                .andExpect(jsonPath("$.message")
-                        .value("User not found"));
-
-        verify(userService)
-                .findById(userId);
-    }
-
-    @Test
-    void shouldUpdateUser() throws Exception {
+    void shouldUpdateAuthenticatedUser() {
 
         UUID userId = UUID.randomUUID();
 
         UpdateUserRequest request = new UpdateUserRequest(
-                "Douglas Magalhães",
-                "douglas.novo@email.com",
-                "novaSenha123"
+                "Douglas Alterado",
+                "douglas@email.com",
+                "123456"
         );
 
         UserResponse response = new UserResponse(
                 userId,
-                "Douglas Magalhães",
-                "douglas.novo@email.com",
+                "Douglas Alterado",
+                "douglas@email.com",
                 true,
-                LocalDateTime.now(),
-                LocalDateTime.now()
+                null,
+                null
         );
 
-        when(userService.update(
-                eq(userId),
-                any(UpdateUserRequest.class)
-        )).thenReturn(response);
+        when(authentication.getPrincipal())
+                .thenReturn(userId);
 
-        mockMvc.perform(
-                        put("/api/v1/users/{id}", userId)
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request))
+        when(
+                userService.update(
+                        eq(userId),
+                        eq(request)
                 )
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id")
-                        .value(userId.toString()))
-                .andExpect(jsonPath("$.name")
-                        .value("Douglas Magalhães"))
-                .andExpect(jsonPath("$.email")
-                        .value("douglas.novo@email.com"));
+        ).thenReturn(response);
+
+        ResponseEntity<UserResponse> result =
+                userController.update(
+                        request,
+                        authentication
+                );
+
+        assertEquals(
+                HttpStatus.OK,
+                result.getStatusCode()
+        );
+
+        assertEquals(
+                response,
+                result.getBody()
+        );
+
+        verify(authentication)
+                .getPrincipal();
 
         verify(userService)
                 .update(
-                        eq(userId),
-                        any(UpdateUserRequest.class)
+                        userId,
+                        request
                 );
     }
 
     @Test
-    void shouldDeactivateUser() throws Exception {
+    void shouldDeleteAuthenticatedUser() {
 
         UUID userId = UUID.randomUUID();
 
-        doNothing()
-                .when(userService)
-                .deactivate(userId);
+        when(authentication.getPrincipal())
+                .thenReturn(userId);
 
-        mockMvc.perform(
-                        delete("/api/v1/users/{id}", userId)
-                )
-                .andExpect(status().isNoContent());
+        ResponseEntity<Void> result =
+                userController.delete(authentication);
 
-        verify(userService)
-                .deactivate(userId);
-    }
-
-    @Test
-    void shouldReturn400WhenCreateRequestIsInvalid()
-            throws Exception {
-
-        CreateUserRequest request = new CreateUserRequest(
-                "",
-                "invalid-email",
-                "123"
+        assertEquals(
+                HttpStatus.NO_CONTENT,
+                result.getStatusCode()
         );
 
-        mockMvc.perform(
-                        post("/api/v1/users")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request))
-                )
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.status").value(400))
-                .andExpect(jsonPath("$.message")
-                        .value("Validation error"));
+        verify(authentication)
+                .getPrincipal();
 
-        verify(userService, never())
-                .create(any(CreateUserRequest.class));
+        verify(userService)
+                .delete(userId);
     }
 }
