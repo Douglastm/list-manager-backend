@@ -4,9 +4,12 @@ import com.douglas.listmanager.feature.user.dto.CreateUserRequest;
 import com.douglas.listmanager.feature.user.dto.UpdateUserRequest;
 import com.douglas.listmanager.feature.user.dto.UserResponse;
 import com.douglas.listmanager.feature.user.service.UserService;
+
 import jakarta.validation.Valid;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -26,16 +29,13 @@ public class UserController {
     public ResponseEntity<UserResponse> create(
             @Valid @RequestBody CreateUserRequest request
     ) {
-        UserResponse response = userService.create(request);
-
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(response);
+                .body(userService.create(request));
     }
 
     @GetMapping
     public ResponseEntity<List<UserResponse>> findAll() {
-
         return ResponseEntity.ok(
                 userService.findAll()
         );
@@ -50,21 +50,25 @@ public class UserController {
         );
     }
 
-    @PutMapping("/{id}")
+    @PutMapping("/me")
     public ResponseEntity<UserResponse> update(
-            @PathVariable UUID id,
-            @Valid @RequestBody UpdateUserRequest request
+            @Valid @RequestBody UpdateUserRequest request,
+            Authentication authentication
     ) {
+        UUID userId = (UUID) authentication.getPrincipal();
+
         return ResponseEntity.ok(
-                userService.update(id, request)
+                userService.update(userId, request)
         );
     }
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deactivate(
-            @PathVariable UUID id
+    @DeleteMapping("/me")
+    public ResponseEntity<Void> delete(
+            Authentication authentication
     ) {
-        userService.deactivate(id);
+        UUID userId = (UUID) authentication.getPrincipal();
+
+        userService.delete(userId);
 
         return ResponseEntity.noContent().build();
     }

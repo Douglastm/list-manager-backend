@@ -7,7 +7,7 @@ import com.douglas.listmanager.feature.user.entity.User;
 import com.douglas.listmanager.feature.user.mapper.UserMapper;
 import com.douglas.listmanager.feature.user.repository.UserRepository;
 import com.douglas.listmanager.shared.exception.BusinessException;
-import com.douglas.listmanager.shared.exception.ResourceNotFoundException;
+
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,53 +19,81 @@ import java.util.UUID;
 public class UserService {
 
     private final UserRepository userRepository;
-    private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
+    private final UserMapper userMapper;
 
     public UserService(
             UserRepository userRepository,
-            UserMapper userMapper,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            UserMapper userMapper
     ) {
         this.userRepository = userRepository;
-        this.userMapper = userMapper;
         this.passwordEncoder = passwordEncoder;
+        this.userMapper = userMapper;
     }
 
     @Transactional
     public UserResponse create(CreateUserRequest request) {
 
         if (userRepository.existsByEmail(request.email())) {
-            throw new BusinessException("Email already registered");
+            throw new BusinessException(
+                    "Email already registered"
+            );
         }
 
-        User user = User.builder()
-                .name(request.name())
-                .email(request.email())
-                .password(passwordEncoder.encode(request.password()))
-                .active(true)
-                .build();
+        User user = new User();
+
+        user.setName(request.name());
+        user.setEmail(request.email());
+        user.setPassword(
+                passwordEncoder.encode(request.password())
+        );
+        user.setActive(true);
 
         User savedUser = userRepository.save(user);
 
         return userMapper.toResponse(savedUser);
     }
 
+    @Transactional(readOnly = true)
+    public List<UserResponse> findAll() {
+
+        return userRepository.findAll()
+                .stream()
+                .map(userMapper::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public UserResponse findById(UUID id) {
+
+        User user = userRepository.findById(id)
+                .orElseThrow(() ->
+                        new BusinessException(
+                                "User not found"
+                        )
+                );
+
+        return userMapper.toResponse(user);
+    }
+
     @Transactional
     public UserResponse update(
-            UUID id,
+            UUID userId,
             UpdateUserRequest request
     ) {
 
-        User user = userRepository.findByIdAndActiveTrue(id)
+        User user = userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new ResourceNotFoundException("User not found")
+                        new BusinessException(
+                                "User not found"
+                        )
                 );
 
-        if (userRepository.existsByEmailAndIdNot(
-                request.email(),
-                id
-        )) {
+        if (
+                !user.getEmail().equals(request.email()) &&
+                        userRepository.existsByEmail(request.email())
+        ) {
             throw new BusinessException(
                     "Email already registered"
             );
@@ -79,7 +107,9 @@ public class UserService {
                         !request.password().isBlank()
         ) {
             user.setPassword(
-                    passwordEncoder.encode(request.password())
+                    passwordEncoder.encode(
+                            request.password()
+                    )
             );
         }
 
@@ -88,39 +118,15 @@ public class UserService {
         return userMapper.toResponse(updatedUser);
     }
 
-    @Transactional(readOnly = true)
-    public UserResponse findById(UUID id) {
-
-        User user = userRepository.findByIdAndActiveTrue(id)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("User not found")
-                );
-
-        return userMapper.toResponse(user);
-    }
-
-    @Transactional(readOnly = true)
-    public List<UserResponse> findAll() {
-
-        return userRepository.findAllByActiveTrue()
-                .stream()
-                .map(userMapper::toResponse)
-                .toList();
-    }
-
     @Transactional
-    public void deactivate(UUID id) {
+    public void delete(UUID userId) {
 
-        User user = userRepository.findById(id)
+        User user = userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new ResourceNotFoundException("User not found")
+                        new BusinessException(
+                                "User not found"
+                        )
                 );
-
-        if (!user.getActive()) {
-            throw new BusinessException(
-                    "User is already inactive"
-            );
-        }
 
         user.setActive(false);
 
