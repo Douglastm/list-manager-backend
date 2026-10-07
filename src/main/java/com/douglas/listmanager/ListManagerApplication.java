@@ -1,4 +1,4 @@
-package com.douglas.list_manager;
+package com.douglas.listmanager;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
