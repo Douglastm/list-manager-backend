@@ -26,6 +26,8 @@ public class SecurityConfig {
     ) throws Exception {
 
         http
+                .cors(cors -> {})
+
                 .csrf(AbstractHttpConfigurer::disable)
 
                 .sessionManagement(session ->
@@ -48,7 +50,7 @@ public class SecurityConfig {
                                 "/api/v1/users"
                         ).permitAll()
 
-                        // OpenAPI
+                        // OpenAPI / Swagger
                         .requestMatchers(
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
